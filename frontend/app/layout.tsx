@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SLM Demo Platform',
-  description: 'Testing Agentic AI capabilities using Qwen 3.5 Small Language Models.',
+  description: 'Testing Agentic AI capabilities using Llama 3.1 Small Language Models.',
 };
 
 export default function RootLayout({

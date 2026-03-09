@@ -83,7 +83,7 @@ Based on the codebase analysis, here is the complete flow of a document/query fr
   {
     "prompt": "User's query",
     "agentId": "demo-agent-1",
-    "modelName": "qwen3.5:0.8b",
+    "modelName": "llama3.1:8b",
     "sessionId": "current-chat-session-uuid"
   }
   ```
@@ -110,7 +110,7 @@ The application runs a `for(int i = 0; i < 3; i++)` loop to allow the SLM to cal
   `callOllama()` constructs an OpenAI-compatible JSON payload that is sent to the `/v1/chat/completions` REST endpoint of the Ollama container. The payload structure is:
   ```json
   {
-    "model": "qwen3.5:0.8b",
+    "model": "llama3.1:8b",
     "temperature": 0.0,
     "stream": false,
     "messages": [
