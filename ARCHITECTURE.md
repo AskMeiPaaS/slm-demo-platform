@@ -9,7 +9,7 @@ The system is containerized using Docker Compose and consists of four primary no
 1. **Frontend**: Next.js (React) application serving the UI.
 2. **Backend**: Spring Boot 3 Java application orchestrating the AI logic.
 3. **Database**: MongoDB serving as both a document store and a Vector Database.
-4. **Local LLM Engine**: Ollama running the lightweight `llama3.2:1b` model.
+4. **Local LLM Engine**: Ollama running the highly capable `llama3.1:8b` model.
 
 ---
 
@@ -35,7 +35,7 @@ The core entry point for the SLM is `ToolOrchestrator.java`. When a prompt arriv
 1. **Memory Retrieval**: The backend fetches previous conversation context associated with the user's `chatSessionId`.
 2. **OpenAI Schema Format**: The backend formats the prompt into the industry-standard `ChatRequest/Message` JSON structure (e.g., `messages: [{role: "system", content: "..."}, {role: "user", content: "..."}]`).
 3. **Local Inference**: The payload is dispatched to the locally hosted Ollama container via its HTTP `/v1/chat/completions` REST endpoint.
-4. **Tool Calling**: Llama 3.2 evaluates available system tools (defined in the system prompt) and can output JSON requesting external data lookups, triggering backend service intercepts like the `MovieSearchTool`.
+4. **Tool Calling**: Llama 3.1 evaluates available system tools (defined in the system prompt) and can output JSON requesting external data lookups, triggering backend service intercepts like the `MovieSearchTool`.
 
 ### 2.2 Voyage AI Vector Search & Reranking Strategy
 To provide high-quality knowledge retrieval to the SLM without overwhelming its context window, a sophisticated hybrid RAG (Retrieval-Augmented Generation) pipeline is applied:
@@ -63,10 +63,10 @@ MongoDB acts as a flexible document store and a high-performance vector database
 
 ---
 
-## 🧠 4. Local SLM (Ollama & Llama 3.2)
+## 🧠 4. Local SLM (Ollama & Llama 3.1)
 
 To ensure privacy, offline-accessibility, and fast JSON structuring, the LLM reasoning is handled locally using `ollama/ollama:latest` Docker image.
-- **Model Choice**: `llama3.2:1b` represents a highly capable small parameter model capable of strict instruction following despite consuming low residential hardware RAM constraints.
+- **Model Choice**: `llama3.1:8b` represents a highly capable model capable of strict instruction following and reasoning despite consuming resident hardware limits.
 - **Security Check**: By isolating the Ollama container within the Docker network, and executing commands via standard API, the system avoids vendor lock-in and prevents proprietary conversational data from leaking to cloud generation networks like OpenAI or Anthropic. Cloud services are strictly reserved for secure, stateless mathematically opaque Voyage AI Vector queries.
 
 ---

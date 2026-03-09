@@ -59,7 +59,8 @@ public class ToolOrchestrator {
                 .build();
     }
 
-    public String executeWithTools(String userPrompt, String modelName, String sessionId) {
+    public String executeWithTools(String userPrompt, String modelName, String sessionId,
+            org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter) {
 
         // Context Assembly
         memoryService.saveChatMessage(sessionId, "user", userPrompt);
@@ -111,7 +112,7 @@ public class ToolOrchestrator {
         conversation.add(new Message("user", "User Request: " + userPrompt));
 
         for (int i = 0; i < 3; i++) {
-            String slmResponse = callOllama(modelName, conversation, sessionId);
+            String slmResponse = callOllama(modelName, conversation, sessionId, emitter);
 
             try {
                 // Clean formatting if LLM wrapped JSON in markdown code blocks
@@ -160,14 +161,19 @@ public class ToolOrchestrator {
         return slmResponse;
     }
 
-    private String callOllama(String model, List<Message> conversation, String sessionId) {
+    private String callOllama(String model, List<Message> conversation, String sessionId,
+            org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter) {
         long startTime = System.currentTimeMillis();
-        String rawResponse = null;
-        int statusCode = 200;
-        String errorDetails = null;
+        StringBuilder rawResponseBuilder = new StringBuilder();
+        StringBuilder contentBuilder = new StringBuilder();
+        java.util.concurrent.atomic.AtomicBoolean suppressStream = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicBoolean checkedStream = new java.util.concurrent.atomic.AtomicBoolean(false);
+        int[] statusCode = { 200 };
+        String[] errorDetails = { null };
 
         ChatRequest req = new ChatRequest(model);
         req.messages.addAll(conversation);
+        req.stream = true;
 
         String requestPayload = "Failed to parse Request";
         try {
@@ -175,44 +181,93 @@ public class ToolOrchestrator {
         } catch (Exception e) {
         }
 
+        final String finalRequestPayload = requestPayload;
+
         try {
-            ChatResponse res = ollamaClient.post().uri("/v1/chat/completions").body(req).retrieve()
-                    .body(ChatResponse.class);
+            ollamaClient.post().uri("/v1/chat/completions").body(req)
+                    .exchange((request, response) -> {
+                        statusCode[0] = response.getStatusCode().value();
+                        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(response.getBody()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (line.isBlank())
+                                    continue;
+                                rawResponseBuilder.append(line).append("\\n");
+                                try {
+                                    String jsonStr = line.startsWith("data: ") ? line.substring(6)
+                                            : line.startsWith("data:") ? line.substring(5) : line;
+                                    if (jsonStr.trim().equals("[DONE]"))
+                                        continue;
+                                    JsonNode node = objectMapper.readTree(jsonStr);
+                                    String chunk = "";
+                                    if (node.has("message") && node.get("message").has("content")) {
+                                        chunk = node.get("message").get("content").asText();
+                                    } else if (node.has("choices") && node.get("choices").isArray()
+                                            && node.get("choices").size() > 0) {
+                                        JsonNode delta = node.get("choices").get(0).get("delta");
+                                        if (delta != null && delta.has("content")) {
+                                            chunk = delta.get("content").asText();
+                                        }
+                                    }
 
-            if (res != null) {
-                try {
-                    rawResponse = objectMapper.writeValueAsString(res);
-                } catch (Exception e) {
-                }
+                                    if (!chunk.isEmpty()) {
+                                        contentBuilder.append(chunk);
 
-                if (res.choices != null && !res.choices.isEmpty() && res.choices.get(0).message != null) {
-                    return res.choices.get(0).message.content;
-                }
+                                        if (emitter != null) {
+                                            if (!checkedStream.get()) {
+                                                String currentContent = contentBuilder.toString().trim();
+                                                if (currentContent.length() >= 5) { // Check prefix after a few chars
+                                                    checkedStream.set(true);
+                                                    if (currentContent.startsWith("{")
+                                                            || currentContent.startsWith("```")) {
+                                                        suppressStream.set(true);
+                                                        emitter.send(
+                                                                org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+                                                                        .event().name("status").data(Map.of("message",
+                                                                                "Agent is using a tool...")));
+                                                    } else {
+                                                        emitter.send(
+                                                                org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+                                                                        .event().name("chunk").data(Map.of("chunk",
+                                                                                contentBuilder.toString()))); // flush
+                                                                                                              // buffer
+                                                    }
+                                                }
+                                            } else if (!suppressStream.get()) {
+                                                emitter.send(
+                                                        org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+                                                                .event().name("chunk").data(Map.of("chunk", chunk)));
+                                            }
+                                        }
+                                    }
+                                } catch (java.io.IOException e) {
+                                    log.warn(
+                                            "[ToolOrchestrator] Client disconnected unexpectedly. Halting LLM stream.");
+                                    break; // Break the while loop
+                                } catch (Exception e) {
+                                    // Ignore JSON parse errors for incomplete chunks
+                                }
+                            }
+                        }
+                        return null;
+                    });
 
-                // Fallback for native Ollama API response if ChatResponse wrapper fails
-                // decoding array
-                if (rawResponse != null && rawResponse.contains("\"message\"")) {
-                    JsonNode node = objectMapper.readTree(rawResponse);
-                    if (node.has("message") && node.get("message").has("content")) {
-                        return node.get("message").get("content").asText();
-                    } else if (node.has("choices") && node.get("choices").isArray() && node.get("choices").size() > 0) {
-                        return node.get("choices").get(0).get("message").get("content").asText();
-                    }
-                }
-
-                return "Failed to parse structured Chat completion from Qwen.";
-            } else {
-                return "Error connecting to Qwen Engine.";
+            if (emitter != null && !checkedStream.get() && !suppressStream.get() && contentBuilder.length() > 0) {
+                emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("chunk")
+                        .data(Map.of("chunk", contentBuilder.toString())));
             }
+            return contentBuilder.toString();
         } catch (Exception e) {
-            statusCode = 500;
-            errorDetails = e.getMessage();
+            statusCode[0] = 500;
+            errorDetails[0] = e.getMessage();
             return "Failed to execute SLM call: " + e.getMessage();
         } finally {
             long duration = System.currentTimeMillis() - startTime;
             externalApiLoggingService.logApiCall(
-                    "Ollama", "/v1/chat/completions", requestPayload, rawResponse, statusCode, duration,
-                    errorDetails, sessionId);
+                    "Ollama", "/v1/chat/completions", finalRequestPayload, rawResponseBuilder.toString(), statusCode[0],
+                    duration,
+                    errorDetails[0], sessionId);
         }
     }
 }

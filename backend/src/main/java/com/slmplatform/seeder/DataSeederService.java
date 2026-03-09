@@ -188,22 +188,32 @@ public class DataSeederService {
 
     private void createVectorIndexOptional(String collectionName) {
         try {
+            // Documenting Hybrid Index Structure. Note that an Atlas Search index is
+            // required for the $search hybrid operator.
             String indexDefinition = String.format("""
                         {
                           "createSearchIndexes": "%s",
                           "indexes": [
                             {
                               "name": "vector_index",
-                              "type": "vectorSearch",
+                              "type": "search",
                               "definition": {
-                                "fields": [
-                                  {
-                                    "type": "vector",
-                                    "path": "embedding",
-                                    "numDimensions": %d,
-                                    "similarity": "cosine"
+                                "mappings": {
+                                  "dynamic": true,
+                                  "fields": {
+                                    "embedding": {
+                                      "type": "knnVector",
+                                      "dimensions": %d,
+                                      "similarity": "cosine"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "fullplot": {
+                                      "type": "string"
+                                    }
                                   }
-                                ]
+                                }
                               }
                             }
                           ]
@@ -212,7 +222,7 @@ public class DataSeederService {
 
             mongoTemplate.executeCommand(indexDefinition);
         } catch (Exception e) {
-            System.err.println("Failed to create vector index: " + e.getMessage());
+            System.err.println("Failed to create hybrid search index: " + e.getMessage());
         }
     }
 }

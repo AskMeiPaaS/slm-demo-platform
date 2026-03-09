@@ -69,7 +69,7 @@ public class MovieSearchTool implements AgentTool {
             List<Document> combinedDocuments = new ArrayList<>();
 
             // 2. Vector Search the Movies Collection (Targeting fullplot)
-            combinedDocuments.addAll(vectorSearchCollection("movies", queryEmbedding, "fullplot"));
+            combinedDocuments.addAll(vectorSearchCollection("movies", query, queryEmbedding, "fullplot"));
 
             if (combinedDocuments.isEmpty()) {
                 return "No relevant movie data found in the database.";
@@ -134,29 +134,55 @@ public class MovieSearchTool implements AgentTool {
         }
     }
 
-    private List<Document> vectorSearchCollection(String collectionName, List<Double> embedding, String textField) {
+    private List<Document> vectorSearchCollection(String collectionName, String query, List<Double> embedding,
+            String textField) {
         try {
-            // Mongo Atlas Vector Search pipeline syntax
+            // Mongo Atlas Hybrid Search ($search) pipeline syntax
             String vectorSearchJson = String.format(
                     """
-                            { "$vectorSearch": { "index": "vector_index", "path": "embedding", "queryVector": %s, "numCandidates": 50, "limit": 10 } }
+                            {
+                                "$search": {
+                                    "index": "vector_index",
+                                    "compound": {
+                                        "should": [
+                                            {
+                                                "text": {
+                                                    "query": "%s",
+                                                    "path": ["title", "fullplot"]
+                                                }
+                                            },
+                                            {
+                                                "knnBeta": {
+                                                    "path": "embedding",
+                                                    "vector": %s,
+                                                    "k": 50
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
                             """,
+                    query.replace("\"", "\\\""), // sanitize quotes
                     embedding.toString());
 
             AggregationOperation vectorSearchOperation = context -> context
                     .getMappedObject(Document.parse(vectorSearchJson));
-            Aggregation aggregation = Aggregation.newAggregation(vectorSearchOperation);
 
-            log.info("[MovieSearchTool] Commencing $vectorSearch on '{}' collection against field '{}'...",
-                    collectionName, textField);
+            // Limit the initial search results
+            AggregationOperation limitOperation = Aggregation.limit(10);
+
+            Aggregation aggregation = Aggregation.newAggregation(vectorSearchOperation, limitOperation);
+
+            log.info("[MovieSearchTool] Commencing Hybrid $search on '{}' collection...", collectionName);
             List<Document> results = mongoTemplate.aggregate(aggregation, collectionName, Document.class)
                     .getMappedResults();
-            log.info("[MovieSearchTool] $vectorSearch completed successfully. Retrieved {} candidate matches.",
+            log.info("[MovieSearchTool] Hybrid $search completed successfully. Retrieved {} candidate matches.",
                     results.size());
             return results;
         } catch (Exception e) {
             log.error(
-                    "[MovieSearchTool] $vectorSearch failed! Ensure Atlas Vector Search index 'vector_index' is built on {}. Error: {}",
+                    "[MovieSearchTool] Hybrid search failed! Ensure Atlas Search index 'vector_index' is built on {}. Error: {}",
                     collectionName, e.getMessage(), e);
             // Fails safe if the vector search index isn't properly created yet in Mongo
             return new ArrayList<>();

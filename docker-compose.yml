@@ -19,7 +19,7 @@ services:
       - OLLAMA_FLASH_ATTENTION=false # FIX: Prevents Apple Silicon CPU deadlock
     volumes:
       - qwen_data:/root/.ollama
-    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:1b && wait" ]
+    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.1:8b && wait" ]
 
   backend:
     build: ./backend

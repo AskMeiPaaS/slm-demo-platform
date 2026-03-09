@@ -30,7 +30,8 @@ public class TraceabilityFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return !path.startsWith("/api/") ||
                 "OPTIONS".equalsIgnoreCase(request.getMethod()) ||
-                path.endsWith("/seed-stream");
+                path.endsWith("/seed-stream") ||
+                path.endsWith("/execute");
     }
 
     @Override

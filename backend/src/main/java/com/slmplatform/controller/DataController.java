@@ -40,8 +40,19 @@ public class DataController {
 
     @GetMapping(path = "/seed-stream", produces = "text/event-stream")
     public ResponseEntity<SseEmitter> seedDataStream() {
-        SseEmitter emitter = new SseEmitter(-1L); // Infinite timeout
+        SseEmitter emitter = new SseEmitter(1800000L); // 30-minute timeout instead of infinite
 
+        emitter.onCompletion(() -> System.out.println("[DataController] SSE Stream completed natively."));
+        emitter.onTimeout(() -> {
+            System.err.println("[DataController] SSE Stream timed out. Completing manually.");
+            emitter.complete();
+            isSeeding.set(false);
+        });
+        emitter.onError(e -> {
+            System.err.println("[DataController] SSE Stream encountered an error. Completing manually.");
+            emitter.completeWithError(e);
+            isSeeding.set(false);
+        });
         if (!isDataLoaderEnabled) {
             try {
                 emitter.send(SseEmitter.event()

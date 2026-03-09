@@ -33,15 +33,38 @@ public class AgentController {
         this.memoryService = memoryService;
     }
 
-    @PostMapping("/agent/execute")
-    public AgentResponse executeTask(@RequestBody AgentRequest request) {
+    @PostMapping(value = "/agent/execute", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter executeTask(
+            @RequestBody AgentRequest request) {
         long startTime = System.currentTimeMillis();
         String sessionId = request.sessionId() != null ? request.sessionId() : "default-session";
-        // Force llama3.2:1b to prevent cached Qwen frontend payloads from hanging the
-        // CPU
-        String finalAnswer = toolOrchestrator.executeWithTools(request.prompt(), "llama3.2:1b", sessionId);
-        long durationMs = System.currentTimeMillis() - startTime;
-        return new AgentResponse(finalAnswer, durationMs);
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(
+                300000L); // 5-minute timeout
+
+        emitter.onCompletion(() -> System.out.println("[AgentController] SSE Stream completed natively."));
+        emitter.onTimeout(() -> {
+            System.err.println("[AgentController] SSE Stream timed out. Completing manually.");
+            emitter.complete();
+        });
+        emitter.onError(e -> {
+            System.err.println("[AgentController] SSE Stream encountered an error. Completing manually.");
+            emitter.completeWithError(e);
+        });
+
+        Thread.startVirtualThread(() -> {
+            try {
+                // Force llama3.1:8b and pass the SseEmitter down
+                toolOrchestrator.executeWithTools(request.prompt(), "llama3.1:8b", sessionId, emitter);
+                long durationMs = System.currentTimeMillis() - startTime;
+                emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("done")
+                        .data(Map.of("timeTakenMs", durationMs)));
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
     }
 
     @DeleteMapping("/agent/memory/{sessionId}")
