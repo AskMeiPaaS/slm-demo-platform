@@ -1,0 +1,37 @@
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS Data
+.DS_Store
+Thumbs.db
+
+# Compiled source
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# Maven
+backend/target/
+frontend/node_modules/
+
+# Next.js / Node
+frontend/.next/
+frontend/.out/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnp.*
+frontend/.eslintcache
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

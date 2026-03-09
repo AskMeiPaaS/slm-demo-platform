@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: slmplatform-backend
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    async:
+      request-timeout: -1
+  mongodb:
+    uri: ${SPRING_DATA_MONGODB_URI:mongodb://slm-mongo:27017/slmplatform}
+
+voyageai:
+  api-key: ${VOYAGE_AI_API_KEY:default}
+  model: ${VOYAGE_MODEL:voyage-4}
+  embedding-dimension: ${VOYAGE_EMBEDDING_DIMENSION:1024}
+  #Only top 1 is sent to LLM for final answer generation, but we can rerank top 5 candidates to improve relevance.
+  reranker-model: ${VOYAGE_RERANKER_MODEL:rerank-2-lite}
+  #Documents with a relevance score below this threshold will be filtered out and not sent to LLM.
+  relevance-threshold: 0.35
+  top-k: ${VOYAGE_RERANKER_TOP_K:3}
+
+platform:
+  api:
+    timeout-connect: ${API_TIMEOUT_CONNECT:300000}
+    timeout-read: ${API_TIMEOUT_READ:600000}
+    master-key: ${PLATFORM_API_MASTER_KEY:dev-key-123}
+  data-loader:
+    enabled: ${ENABLE_DATA_LOADER:true}
+    
+ollama:
+  host: ${OLLAMA_HOST:http://localhost:11434}

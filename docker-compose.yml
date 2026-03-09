@@ -1,0 +1,54 @@
+services:
+  mongodb:
+    image: mongo:8.2.5
+    container_name: slm-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    command: [ "--wiredTigerCacheSizeGB", "1" ]
+
+  qwen-engine:
+    image: ollama/ollama:latest
+    container_name: qwen-3-5-slm
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0 # FIX: Forces Ollama to accept connections from the Java backend
+      - OLLAMA_FLASH_ATTENTION=false # FIX: Prevents Apple Silicon CPU deadlock
+    volumes:
+      - qwen_data:/root/.ollama
+    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:1b && wait" ]
+
+  backend:
+    build: ./backend
+    container_name: slm-java-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://qwen-engine:11434
+      - ENABLE_DATA_LOADER=${ENABLE_DATA_LOADER:-true}
+      - VOYAGEAI_TOP_K=5
+    depends_on:
+      - mongodb
+      - qwen-engine
+    volumes:
+      - ./sample-data:/app/sample-data # Mount sample data for the seeder
+
+  frontend:
+    build: ./frontend
+    container_name: slm-nextjs-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+      - NEXT_PUBLIC_ENABLE_DATA_LOADER=${ENABLE_DATA_LOADER:-true}
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  qwen_data:
