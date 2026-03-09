@@ -4,6 +4,8 @@ This document details the architecture, design decisions, and data flow of the S
 
 ## 🏗️ High-Level Architecture
 
+![Chatbot Workflow](/Users/rankesh/.gemini/antigravity/brain/014590ab-45cf-4b89-9417-9791a0c995f2/chatbot_workflow_simple_1773060934513.png)
+
 The system is containerized using Docker Compose and consists of four primary nodes:
 
 1. **Frontend**: Next.js (React) application serving the UI.
