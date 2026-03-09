@@ -9,16 +9,16 @@ services:
       - mongo_data:/data/db
     command: [ "--wiredTigerCacheSizeGB", "1" ]
 
-  qwen-engine:
+  ollama-engine:
     image: ollama/ollama:latest
-    container_name: qwen-3-5-slm
+    container_name: ollama
     ports:
       - "11434:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0 # FIX: Forces Ollama to accept connections from the Java backend
       - OLLAMA_FLASH_ATTENTION=false # FIX: Prevents Apple Silicon CPU deadlock
     volumes:
-      - qwen_data:/root/.ollama
+      - ollama_data:/root/.ollama
     entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.1:8b && wait" ]
 
   backend:
@@ -29,12 +29,12 @@ services:
     env_file:
       - .env
     environment:
-      - OLLAMA_HOST=http://qwen-engine:11434
+      - OLLAMA_HOST=http://ollama-engine:11434
       - ENABLE_DATA_LOADER=${ENABLE_DATA_LOADER:-true}
       - VOYAGEAI_TOP_K=5
     depends_on:
       - mongodb
-      - qwen-engine
+      - ollama-engine
     volumes:
       - ./sample-data:/app/sample-data # Mount sample data for the seeder
 
@@ -51,4 +51,4 @@ services:
 
 volumes:
   mongo_data:
-  qwen_data:
+  ollama_data:
