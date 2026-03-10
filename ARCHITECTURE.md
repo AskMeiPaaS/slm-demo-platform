@@ -4,7 +4,7 @@ This document details the architecture, design decisions, and data flow of the S
 
 ## 🏗️ High-Level Architecture
 
-![Chatbot Workflow](//chatbot_workflow.png)
+![Chatbot Workflow](/chatbot_workflow.png)
 
 The system is containerized using Docker Compose and consists of four primary nodes:
 
